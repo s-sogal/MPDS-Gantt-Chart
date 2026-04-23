@@ -20,6 +20,7 @@ const GUESSES = {
 let parsedRows    = [];
 let columnHeaders = [];
 let ganttTasks    = [];
+let ganttChart    = null;
 
 // ── Budget inputs ─────────────────────────
 
@@ -221,7 +222,7 @@ function parseDate(raw) {
   if (raw instanceof Date && !isNaN(raw)) return raw;
   if (raw === '' || raw === null || raw === undefined) return null;
   const num = parseFloat(raw);
-  if (!isNaN(num) && num > 1000) return new Date(Math.round((num - 25569) * 86400 * 1000));
+  if (!isNaN(num) && num > 30000) return new Date(Math.round((num - 25569) * 86400 * 1000));
   const d = new Date(String(raw));
   return isNaN(d) ? null : d;
 }
@@ -293,6 +294,185 @@ function renderPreview(warnings) {
           </svg>${esc(w)}
         </div>`).join('')
     : '';
+
+  renderGanttChart();
+}
+
+// ── Highcharts Gantt chart ─────────────────
+
+function renderGanttChart() {
+  const section = document.getElementById('chart-section');
+
+  if (!ganttTasks.length) {
+    section.style.display = 'none';
+    if (ganttChart) { ganttChart.destroy(); ganttChart = null; }
+    return;
+  }
+
+  // Unique tournaments in insertion order
+  const tournSeen = new Set();
+  const tournamentNames = [];
+  ganttTasks.forEach(t => {
+    if (!tournSeen.has(t.name)) { tournSeen.add(t.name); tournamentNames.push(t.name); }
+  });
+
+  const { deadline } = getBudgetSettings();
+
+  // Build series data
+  const confirmData = [], bookData = [], budgetData = [], milestones = [];
+  const mileSeen = new Set();
+
+  ganttTasks.forEach(t => {
+    const y = tournamentNames.indexOf(t.name);
+    if (t.type === 'confirm') {
+      confirmData.push({ name: t.task, start: t.dueDate.getTime(), end: t.tournDate.getTime(), y });
+    } else if (t.type === 'book') {
+      bookData.push({ name: t.task, start: t.dueDate.getTime(), end: t.tournDate.getTime(), y });
+    } else if (t.type === 'budget' && t.deadline) {
+      budgetData.push({ name: t.task, start: t.dueDate.getTime(), end: t.deadline.getTime(), y });
+    }
+    if (t.tournDate && !mileSeen.has(t.name)) {
+      mileSeen.add(t.name);
+      milestones.push({ name: t.name, start: t.tournDate.getTime(), end: t.tournDate.getTime(), y, milestone: true });
+    }
+  });
+
+  // xAxis plot lines
+  const plotLines = [{
+    value: Date.now(), color: '#e8ff47', width: 1.5, dashStyle: 'ShortDash', zIndex: 5,
+    label: { text: 'Today', align: 'left', style: { color: '#e8ff47', fontSize: '10px', fontFamily: "'DM Mono', monospace" } },
+  }];
+  if (deadline) {
+    plotLines.push({
+      value: deadline.getTime(), color: '#f0c040', width: 1.5, dashStyle: 'ShortDash', zIndex: 5,
+      label: { text: 'Budget Deadline', align: 'left', style: { color: '#f0c040', fontSize: '10px', fontFamily: "'DM Mono', monospace" } },
+    });
+  }
+
+  const rowH   = 48;
+  const height = Math.max(340, tournamentNames.length * rowH + 180);
+  document.getElementById('gantt-container').style.height = height + 'px';
+
+  if (ganttChart) { ganttChart.destroy(); ganttChart = null; }
+
+  ganttChart = Highcharts.ganttChart('gantt-container', {
+    chart: {
+      backgroundColor: '#13161d',
+      style: { fontFamily: "'DM Mono', monospace" },
+      borderRadius: 14,
+      spacingTop: 24,
+      spacingBottom: 16,
+    },
+    title: {
+      text: 'Tournament Prep Timeline', align: 'left',
+      style: { color: '#dde2ee', fontFamily: "'Syne', sans-serif", fontWeight: '700', fontSize: '15px' },
+    },
+    subtitle: {
+      text: `${tournamentNames.length} tournament${tournamentNames.length !== 1 ? 's' : ''} · ${ganttTasks.length} task${ganttTasks.length !== 1 ? 's' : ''}`,
+      align: 'left',
+      style: { color: '#5a6278', fontFamily: "'DM Mono', monospace", fontSize: '11px' },
+    },
+    xAxis: {
+      plotLines,
+      dateTimeLabelFormats: { week: "%b %e", month: "%b '%y" },
+      gridLineColor: '#252a38', lineColor: '#252a38', tickColor: '#252a38',
+      labels: { style: { color: '#8891a8', fontSize: '10px' } },
+    },
+    yAxis: {
+      type: 'category',
+      categories: tournamentNames,
+      gridLineColor: '#252a38',
+      labels: { style: { color: '#dde2ee', fontSize: '11px', fontWeight: '600' } },
+      plotBands: tournamentNames.map((_, i) => ({
+        from: i - 0.5, to: i + 0.5,
+        color: i % 2 === 0 ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0)',
+      })),
+    },
+    navigator: {
+      enabled: tournamentNames.length > 6,
+      handles: { backgroundColor: '#2f3547', borderColor: '#5a6278' },
+      maskFill: 'rgba(71,200,255,0.06)',
+      series: { color: '#2E75B6', type: 'gantt' },
+      xAxis: { gridLineColor: '#252a38', labels: { style: { color: '#5a6278' } } },
+    },
+    scrollbar:     { enabled: tournamentNames.length > 6 },
+    rangeSelector: { enabled: false },
+    legend: {
+      enabled: true,
+      backgroundColor: '#1a1e28', borderColor: '#252a38', borderWidth: 1, borderRadius: 8,
+      itemStyle:      { color: '#8891a8', fontFamily: "'DM Mono', monospace", fontSize: '11px' },
+      itemHoverStyle: { color: '#dde2ee' },
+    },
+    tooltip: {
+      outside: true,
+      backgroundColor: '#1a1e28', borderColor: '#2f3547', borderRadius: 8,
+      style: { color: '#dde2ee', fontFamily: "'DM Mono', monospace", fontSize: '11px' },
+      formatter: function () {
+        const p = this.point;
+        const s = Highcharts.dateFormat('%b %e, %Y', p.start);
+        const e = Highcharts.dateFormat('%b %e, %Y', p.end);
+        const hdr = `<span style="color:${this.color}">■</span> <b>${this.series.name}</b><br/>`;
+        if (p.milestone) return hdr + `<b>${p.name}</b><br/>${s}`;
+        return hdr + `${p.name}<br/>From: ${s}<br/>To: ${e}`;
+      },
+    },
+    series: [
+      {
+        name: 'Confirm Teams', color: '#4a8fd4', borderColor: 'rgba(74,143,212,0.5)', borderRadius: 4,
+        dataLabels: { enabled: true, format: '{point.name}', align: 'left', padding: 6,
+          style: { color: '#fff', textOutline: 'none', fontSize: '10px', fontWeight: '500' } },
+        data: confirmData,
+      },
+      {
+        name: 'Book Transport', color: '#5ec27a', borderColor: 'rgba(94,194,122,0.5)', borderRadius: 4,
+        dataLabels: { enabled: true, format: '{point.name}', align: 'left', padding: 6,
+          style: { color: '#fff', textOutline: 'none', fontSize: '10px', fontWeight: '500' } },
+        data: bookData,
+      },
+      {
+        name: 'Budget Request', color: '#f0c040', borderColor: 'rgba(240,192,64,0.5)', borderRadius: 4,
+        dataLabels: { enabled: true, format: '{point.name}', align: 'left', padding: 6,
+          style: { color: '#0b0d11', textOutline: 'none', fontSize: '10px', fontWeight: '500' } },
+        data: budgetData,
+      },
+      {
+        name: 'Tournament Date', color: '#e8ff47', marker: { symbol: 'diamond' },
+        data: milestones,
+      },
+    ],
+    exporting: {
+      enabled: true, allowHTML: true,
+      sourceWidth: 1400, sourceHeight: height + 60,
+      filename: 'tournament_gantt',
+      chartOptions: { chart: { backgroundColor: '#13161d' } },
+      buttons: {
+        contextButton: {
+          theme: {
+            fill: '#1a1e28', stroke: '#2f3547', 'stroke-width': 1, r: 6,
+            style: { color: '#8891a8' },
+            states: { hover: { fill: '#252a38' } },
+          },
+        },
+      },
+    },
+    credits: { enabled: false },
+  });
+
+  section.style.display = 'block';
+}
+
+// ── Highcharts export helpers ─────────────────────────────────────────────
+
+function exportGanttPNG() {
+  if (!ganttChart) { showStatus('No chart to export yet.', true); return; }
+  ganttChart.exportChartLocal({ type: 'image/png', filename: 'tournament_gantt', scale: 2 });
+  showStatus('Exporting PNG…');
+}
+
+function exportGanttPDF() {
+  if (!ganttChart) { showStatus('No chart to export yet.', true); return; }
+  ganttChart.exportChartLocal({ type: 'application/pdf', filename: 'tournament_gantt' });
+  showStatus('Exporting PDF…');
 }
 
 // ── Excel Gantt export (client-side, styled) ──────────────────────────────
@@ -502,10 +682,10 @@ function downloadTemplate() {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([
     ['Tournament Name','Date','Location','Transport','Debaters'],
-    ['Spring Invitational',   '2025-04-15','Chicago, IL',      'fly',    8],
-    ['Regional Championships','2025-05-20','Boston, MA',        'amtrak', 6],
-    ['District Qualifier',    '2025-06-10','Silver Spring, MD', 'car',    4],
-    ['State Finals',          '2025-07-08','Richmond, VA',      'metro',  10],
+    ['Spring Invitational',   '2026-04-15','Chicago, IL',      'fly',    8],
+    ['Regional Championships','2026-05-20','Boston, MA',        'amtrak', 6],
+    ['District Qualifier',    '2026-06-10','Silver Spring, MD', 'car',    4],
+    ['State Finals',          '2026-07-08','Richmond, VA',      'metro',  10],
   ]);
   ws['!cols']=[{wch:26},{wch:14},{wch:22},{wch:12},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws,'Tournaments');
@@ -516,9 +696,11 @@ function downloadTemplate() {
 
 function clearFile() {
   parsedRows=[]; columnHeaders=[]; ganttTasks=[]; window._tournamentData=[];
+  if (ganttChart) { ganttChart.destroy(); ganttChart = null; }
   document.getElementById('file-banner').classList.remove('visible');
   document.getElementById('mapper-section').classList.remove('visible');
   document.getElementById('preview-section').classList.remove('visible');
+  document.getElementById('chart-section').style.display = 'none';
   document.getElementById('format-hint').style.display='';
   document.getElementById('file-input').value='';
   document.getElementById('warnings').innerHTML='';

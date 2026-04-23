@@ -1,0 +1,7 @@
+{
+  "name": "mpds-gantt-chart",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "npx serve ."
+  }
+}
