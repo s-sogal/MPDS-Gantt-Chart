@@ -28,10 +28,12 @@ function onBudgetChange() {
 }
 
 function getBudgetSettings() {
-  const deadlineVal = document.getElementById('budget-deadline').value;
-  const leadDays    = parseInt(document.getElementById('budget-lead').value) || 7;
-  const deadline    = deadlineVal ? new Date(deadlineVal + 'T12:00:00') : null;
-  return { deadline, leadDays };
+  return [1, 2, 3].map(n => {
+    const deadlineVal = document.getElementById(`budget-deadline-${n}`).value;
+    const leadDays    = parseInt(document.getElementById(`budget-lead-${n}`).value) || 7;
+    const deadline    = deadlineVal ? new Date(deadlineVal + 'T12:00:00') : null;
+    return { deadline, leadDays, num: n };
+  }).filter(s => s.deadline !== null);
 }
 
 // ── Drag & drop ───────────────────────────
@@ -158,7 +160,7 @@ function applyMapping(silent) {
 
 function recomputeTasks(warnings) {
   warnings = warnings || [];
-  const { deadline, leadDays } = getBudgetSettings();
+  const budgetSettings = getBudgetSettings();
   const data = window._tournamentData || [];
 
   ganttTasks = [];
@@ -198,18 +200,19 @@ function recomputeTasks(warnings) {
       });
     }
 
-    // ③ Budget request — leadDays before the deadline
-    if (deadline) {
+    // ③ Budget requests — one per active deadline
+    budgetSettings.forEach(({ deadline, leadDays, num }) => {
       const budgetDate = offsetDays(deadline, -leadDays);
       ganttTasks.push({
         name, loc, transport, debaters, tournDate: date,
-        task:       'Submit budget request',
+        task:       `Submit budget request (Deadline ${num})`,
         dueDate:    budgetDate,
         daysBefore: daysBetween(budgetDate, date),
         type:       'budget',
+        budgetNum:  num,
         deadline,
       });
-    }
+    });
   });
 
   renderPreview(warnings);
@@ -267,16 +270,18 @@ function renderPreview(warnings) {
       ? `<span class="debater-badge">${t.debaters} debater${t.debaters !== 1 ? 's' : ''}</span>`
       : '';
 
-    const pillClass = { confirm:'task-confirm', book:'task-book', budget:'task-budget' }[t.type] || 'task-confirm';
+    const pillClass = t.type === 'budget'
+      ? `task-budget task-budget-${t.budgetNum || 1}`
+      : ({ confirm:'task-confirm', book:'task-book' }[t.type] || 'task-confirm');
 
     return `<tr>
       <td>${nameCell}</td>
       <td>${debatersCell}</td>
       <td><span class="task-pill ${pillClass}"><span class="task-dot"></span>${esc(t.task)}</span></td>
-      <td style="white-space:nowrap;color:var(--text)">${fmtDate(t.dueDate)}</td>
+      <td><span class="date-val">${fmtDate(t.dueDate)}</span></td>
       <td>${t.daysBefore > 0
-        ? `<span class="ahead-val">${t.daysBefore}</span> <span style="color:var(--muted)">days before</span>`
-        : '<span style="color:var(--muted)">—</span>'}</td>
+        ? `<span class="ahead-val">${t.daysBefore}</span><span class="days-lbl"> days before</span>`
+        : `<span style="color:var(--muted)">—</span>`}</td>
     </tr>`;
   });
 
@@ -293,6 +298,135 @@ function renderPreview(warnings) {
           </svg>${esc(w)}
         </div>`).join('')
     : '';
+
+  renderGanttChart();
+}
+
+// ── Highcharts Gantt chart ────────────────
+
+const BUDGET_CHART_COLORS = { 1: '#d4a017', 2: '#d47217', 3: '#c44a30' };
+let _hcChart = null;
+
+function renderGanttChart() {
+  const section = document.getElementById('gantt-chart-section');
+  if (!ganttTasks.length || typeof Highcharts === 'undefined') {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+
+  const tournamentNames = [];
+  ganttTasks.forEach(t => { if (!tournamentNames.includes(t.name)) tournamentNames.push(t.name); });
+
+  const seriesMap = {
+    confirm: { name: 'Confirm Teams',      color: '#4a8fd4', data: [] },
+    book:    { name: 'Book Transport',     color: '#4ec27a', data: [] },
+    budget1: { name: 'Budget Deadline 1',  color: '#d4a017', data: [] },
+    budget2: { name: 'Budget Deadline 2',  color: '#d47217', data: [] },
+    budget3: { name: 'Budget Deadline 3',  color: '#c44a30', data: [] },
+    tourn:   { name: 'Tournament Date',    color: '#70d47a', data: [] },
+  };
+
+  ganttTasks.forEach(t => {
+    const y   = tournamentNames.indexOf(t.name);
+    const start = t.dueDate.getTime();
+    const end   = t.tournDate ? t.tournDate.getTime() : start + 86400000;
+
+    if (t.type === 'confirm') {
+      seriesMap.confirm.data.push({ name: t.task, start, end, y });
+    } else if (t.type === 'book') {
+      seriesMap.book.data.push({ name: t.task, start, end, y });
+    } else if (t.type === 'budget') {
+      const budgetEnd = t.deadline ? t.deadline.getTime() : end;
+      const key = `budget${t.budgetNum}`;
+      if (seriesMap[key]) seriesMap[key].data.push({ name: t.task, start, end: budgetEnd, y });
+    }
+  });
+
+  // Tournament date milestones
+  tournamentNames.forEach((name, y) => {
+    const t = ganttTasks.find(task => task.name === name && task.tournDate);
+    if (!t) return;
+    const ms = t.tournDate.getTime();
+    seriesMap.tourn.data.push({ name: 'Tournament', start: ms, end: ms + 86400000 * 2, y });
+  });
+
+  const series = Object.values(seriesMap).filter(s => s.data.length > 0);
+
+  if (_hcChart) { try { _hcChart.destroy(); } catch(_) {} _hcChart = null; }
+
+  _hcChart = Highcharts.ganttChart('highcharts-gantt', {
+    chart: {
+      backgroundColor: '#0d1018',
+      borderWidth: 0,
+      style: { fontFamily: "'DM Mono', monospace" },
+      spacing: [16, 16, 16, 0],
+    },
+    title: { text: null },
+    xAxis: [{
+      labels: { style: { color: '#6b7490', fontSize: '10px' } },
+      lineColor: '#1e2333', tickColor: '#1e2333', gridLineColor: '#161b27',
+      dateTimeLabelFormats: { week: '%e %b', month: "%b '%y" },
+    }, {
+      labels: { style: { color: '#6b7490', fontSize: '10px' } },
+      lineColor: '#1e2333', tickColor: '#1e2333', gridLineColor: '#161b27',
+    }],
+    yAxis: {
+      uniqueNames: true,
+      categories: tournamentNames,
+      gridLineColor: '#161b27',
+      lineColor: '#1e2333',
+      labels: { style: { color: '#c8d0e4', fontSize: '12px', fontWeight: '600' } },
+      grid: { borderColor: '#1e2333', borderWidth: 1 },
+    },
+    navigator: {
+      enabled: tournamentNames.length > 3,
+      backgroundColor: '#13161d',
+      outlineColor: '#252a38',
+      handles: { backgroundColor: '#252a38', borderColor: '#404866' },
+      maskFill: 'rgba(232,255,71,.08)',
+      xAxis: { labels: { style: { color: '#6b7490' } }, gridLineColor: '#1e2333' },
+      series: { color: '#e8ff47', lineColor: '#e8ff47' },
+    },
+    rangeSelector: {
+      enabled: false,
+    },
+    scrollbar: { enabled: false },
+    legend: {
+      enabled: true,
+      align: 'center',
+      verticalAlign: 'bottom',
+      itemStyle: { color: '#8891a8', fontSize: '11px', fontWeight: '400' },
+      itemHoverStyle: { color: '#dde2ee' },
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+      symbolRadius: 3,
+    },
+    tooltip: {
+      backgroundColor: '#1a1e28',
+      borderColor: '#2f3547',
+      borderRadius: 8,
+      shadow: false,
+      style: { color: '#dde2ee', fontSize: '11px' },
+      useHTML: true,
+      formatter: function() {
+        const p = this.point;
+        const s = Highcharts.dateFormat('%b %e, %Y', p.start);
+        const e = Highcharts.dateFormat('%b %e, %Y', p.end);
+        return `<div style="padding:2px 4px">
+          <div style="color:${this.series.color};font-weight:600;margin-bottom:4px">${this.series.name}</div>
+          <div style="color:#8891a8">Tournament: <span style="color:#dde2ee">${esc(p.yCategory || '')}</span></div>
+          <div style="color:#8891a8">From: <span style="color:#dde2ee">${s}</span></div>
+          <div style="color:#8891a8">To: &nbsp;&nbsp;&nbsp;  <span style="color:#dde2ee">${e}</span></div>
+        </div>`;
+      },
+    },
+    plotOptions: {
+      series: { borderRadius: 4, pointPadding: 0.08, groupPadding: 0, dataLabels: { enabled: false } },
+    },
+    credits: { enabled: false },
+    series,
+  });
 }
 
 // ── Excel Gantt export (client-side, styled) ──────────────────────────────
@@ -300,9 +434,11 @@ function renderPreview(warnings) {
 const C = {
   NAVY:'1F3864', BLUE:'2E75B6', BLUE_LIGHT:'D6E4F0',
   GREEN:'70AD47', GOLD:'BF8F00', GOLD_LIGHT:'FFF2CC',
-  BAR_CONFIRM:'2E75B6', BAR_BOOK:'1F5C2E', BAR_BUDGET:'BF8F00',
+  BAR_CONFIRM:'2E75B6', BAR_BOOK:'1F5C2E',
+  BAR_BUDGET_1:'BF8F00', BAR_BUDGET_2:'C06000', BAR_BUDGET_3:'903020',
   ROW_ALT:'F2F7FB', WHITE:'FFFFFF', GRID:'BDD7EE', TEXT:'1F3864', RED:'C00000',
 };
+const BUDGET_BAR_COLORS = { 1: 'BF8F00', 2: 'C06000', 3: '903020' };
 
 function xfFill(hex){ return { patternType:'solid', fgColor:{rgb:hex} }; }
 function xfFont(o){   return { name:'Arial', sz:o.sz||9, bold:!!o.bold, italic:!!o.italic, color:{rgb:o.color||C.TEXT} }; }
@@ -316,7 +452,8 @@ function R(r,c){ return `${colLetter(c)}${r+1}`; }
 function exportExcel() {
   if (!ganttTasks.length) { showStatus('Nothing to export yet.', true); return; }
 
-  const { deadline } = getBudgetSettings();
+  const budgetSettings = getBudgetSettings();
+  const deadlines = budgetSettings.map(s => s.deadline).filter(Boolean);
   const tournMap = new Map();
   ganttTasks.forEach(t => { if (!tournMap.has(t.name)) tournMap.set(t.name, t); });
   const tournaments = [...tournMap.values()];
@@ -388,15 +525,21 @@ function exportExcel() {
     const isTod=mon<=today && today<new Date(mon.getTime()+7*864e5);
     if(isTod) sc(ROW_QTR,dc,'TODAY',cSt(C.GREEN,xfFont({sz:7,bold:true,color:C.WHITE}),xfAlign('center','center')));
     sc(ROW_WEEK,dc,mon.getDate(),cSt(isTod?C.GREEN:C.BLUE_LIGHT,xfFont({sz:7,bold:isTod,color:isTod?C.WHITE:C.TEXT}),xfAlign('center','center')));
-    // Budget deadline marker on month row
-    if(deadline && mon<=deadline && deadline<new Date(mon.getTime()+7*864e5))
-      sc(ROW_MON,dc,'BUDGET DL',cSt(C.GOLD,xfFont({sz:7,bold:true,color:C.WHITE}),xfAlign('center','center')));
+    // Budget deadline markers on month row
+    deadlines.forEach((dl, di) => {
+      if(dl && mon<=dl && dl<new Date(mon.getTime()+7*864e5))
+        sc(ROW_MON,dc,`BUDGET DL ${di+1}`,cSt(BUDGET_BAR_COLORS[di+1]||C.GOLD,xfFont({sz:7,bold:true,color:C.WHITE}),xfAlign('center','center')));
+    });
   });
 
   // Data rows
   let cr=ROW_DATA;
-  const TCOLORS={confirm:C.BAR_CONFIRM, book:C.BAR_BOOK, budget:C.BAR_BUDGET};
-  const TLABELS={confirm:'Confirm Teams', book:'Book Transport', budget:'Budget Request'};
+  const TCOLORS = t => t.type === 'budget'
+    ? (BUDGET_BAR_COLORS[t.budgetNum] || C.BAR_BUDGET_1)
+    : ({ confirm: C.BAR_CONFIRM, book: C.BAR_BOOK }[t.type] || C.BAR_CONFIRM);
+  const TLABELS = t => t.type === 'budget'
+    ? `Budget Request (DL ${t.budgetNum})`
+    : ({ confirm:'Confirm Teams', book:'Book Transport' }[t.type] || t.task);
 
   tournaments.forEach(tourn=>{
     const tTasks=ganttTasks.filter(t=>t.name===tourn.name);
@@ -412,7 +555,7 @@ function exportExcel() {
 
     tTasks.forEach((task,ti)=>{
       const alt=ti%2===1, bg=alt?C.ROW_ALT:C.WHITE;
-      const barColor=TCOLORS[task.type]||C.BAR_CONFIRM;
+      const barColor=TCOLORS(task);
 
       sc(cr,COL_TOURN, ti===0?tourn.name:'',  cSt(bg,xfFont({sz:8,bold:ti===0}),xfAlign('left','center')));
       sc(cr,COL_TASK,  task.task,               cSt(bg,xfFont({sz:8}),            xfAlign('left','center')));
@@ -426,12 +569,12 @@ function exportExcel() {
         const isF=inB&&bs>=mon&&bs<me;
         const isTod=mon<=today&&today<me;
         const isMk=tourn.tournDate&&mon<=tourn.tournDate&&tourn.tournDate<me;
-        const isBudgetDL=deadline&&mon<=deadline&&deadline<me;
+        const isBudgetDL=deadlines.some(dl=>dl&&mon<=dl&&dl<me);
 
         let fill=bg, lbl='', fnt=xfFont({sz:7});
         if(inB){
           fill=barColor; fnt=xfFont({sz:7,bold:true,color:C.WHITE});
-          if(isF) lbl=TLABELS[task.type]||task.task;
+          if(isF) lbl=TLABELS(task);
         } else if(isMk){ fill=C.GREEN; fnt=xfFont({sz:7,bold:true,color:C.WHITE}); }
         else if(isBudgetDL&&!inB){ fill=C.GOLD_LIGHT; }
         else if(isTod){ fill='E8F4EA'; }
@@ -447,7 +590,13 @@ function exportExcel() {
   });
 
   // Legend
-  [[C.BAR_CONFIRM,'Confirm Teams (1 month before)'],[C.BAR_BOOK,'Book Transport'],[C.BAR_BUDGET,'Submit Budget Request'],[C.GREEN,'Tournament Date']].forEach(([color,label],i)=>{
+  const legendItems=[
+    [C.BAR_CONFIRM,'Confirm Teams (1 month before)'],
+    [C.BAR_BOOK,'Book Transport'],
+    ...budgetSettings.map(s=>[BUDGET_BAR_COLORS[s.num]||C.BAR_BUDGET_1,`Budget Request (Deadline ${s.num})`]),
+    [C.GREEN,'Tournament Date'],
+  ];
+  legendItems.forEach(([color,label],i)=>{
     const bc=i*3;
     sc(cr,bc,' ',cSt(color,xfFont({}),xfAlign('center','center')));
     sc(cr,bc+1,label,cSt(C.WHITE,xfFont({sz:8}),xfAlign('left','center')));
@@ -467,29 +616,34 @@ function exportExcel() {
 
   // Sheet 2: Summary
   const ws2={};
-  const h2=['#','Tournament','Date','Location','Transport','Debaters','Book By','Budget Request By','Budget Deadline'];
+  const bdlHeaders = budgetSettings.map(s=>`Budget DL ${s.num} Request By`);
+  const bdlDlHeaders = budgetSettings.map(s=>`Budget Deadline ${s.num}`);
+  const h2=['#','Tournament','Date','Location','Transport','Debaters','Book By',...bdlHeaders,...bdlDlHeaders];
   h2.forEach((h,ci)=>{ ws2[R(0,ci)]={v:h,t:'s',s:cSt(C.NAVY,xfFont({sz:9,bold:true,color:C.WHITE}),xfAlign('center','center'))}; });
 
   const seen2=new Set(); let r2=1,idx2=1;
   ganttTasks.forEach(t=>{
     if(!seen2.has(t.name)){
       seen2.add(t.name);
-      const bookTask  =ganttTasks.find(x=>x.name===t.name&&x.type==='book');
-      const budgTask  =ganttTasks.find(x=>x.name===t.name&&x.type==='budget');
+      const bookTask = ganttTasks.find(x=>x.name===t.name&&x.type==='book');
+      const bdlRequestCols = budgetSettings.map(s=>{
+        const bt=ganttTasks.find(x=>x.name===t.name&&x.type==='budget'&&x.budgetNum===s.num);
+        return bt?fmtDate(bt.dueDate):'N/A';
+      });
+      const bdlDateCols = budgetSettings.map(s=>fmtDate(s.deadline));
       const alt=idx2%2===0;
       [idx2,t.name,t.tournDate?fmtDate(t.tournDate):'',t.loc||'',t.transport||'',
-       t.debaters||'',
-       bookTask?fmtDate(bookTask.dueDate):'N/A',
-       budgTask?fmtDate(budgTask.dueDate):'No deadline set',
-       deadline?fmtDate(deadline):'Not set',
+       t.debaters||'',bookTask?fmtDate(bookTask.dueDate):'N/A',
+       ...bdlRequestCols,...bdlDateCols,
       ].forEach((v,ci)=>{
         ws2[R(r2,ci)]={v:String(v),t:'s',s:cSt(alt?C.ROW_ALT:C.WHITE,xfFont({sz:9}),xfAlign(ci===0||ci>=5?'center':'left','center'))};
       });
       r2++;idx2++;
     }
   });
-  ws2['!ref'] =`A1:${colLetter(8)}${r2}`;
-  ws2['!cols']=[{wch:4},{wch:26},{wch:14},{wch:20},{wch:12},{wch:10},{wch:16},{wch:20},{wch:16}];
+  const totalSumCols = 7 + budgetSettings.length * 2;
+  ws2['!ref']=`A1:${colLetter(totalSumCols-1)}${r2}`;
+  ws2['!cols']=[{wch:4},{wch:26},{wch:14},{wch:20},{wch:12},{wch:10},{wch:16},...budgetSettings.flatMap(()=>[{wch:18},{wch:16}])];
   XLSX.utils.book_append_sheet(wb,ws2,'Summary');
 
   XLSX.writeFile(wb,'tournament_gantt.xlsx');

@@ -4,39 +4,98 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Tournament Gantt Planner</title>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
 <div class="wrap">
 
   <header>
-    <div class="eyebrow"><span class="eyebrow-line"></span>Tournament Planner</div>
-    <h1>Upload &amp;<br><em>Generate</em></h1>
-    <p class="subtitle">Upload your semester schedule and set your budget deadline — get a color-coded Gantt chart with every prep task calculated automatically.</p>
-    <a class="template-hint" onclick="downloadTemplate()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Download blank template (.xlsx)
-    </a>
+    <div class="hero-badge">
+      <span class="hero-badge-dot"></span>
+      MPDS · Tournament Planner
+    </div>
+
+    <h1>Upload &amp;<br><em>Generate.</em></h1>
+
+    <p class="subtitle">
+      Drop in your semester schedule, set up to three budget deadlines,
+      and get a fully color-coded prep Gantt chart — every task date
+      calculated for you.
+    </p>
+
+    <div class="hero-actions">
+      <a class="hero-dl-btn" onclick="downloadTemplate()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download blank template
+        <span class="hero-dl-ext">.xlsx</span>
+      </a>
+      <div class="hero-steps">
+        <span>Upload</span>
+        <span class="hero-step-arrow">→</span>
+        <span>Set deadlines</span>
+        <span class="hero-step-arrow">→</span>
+        <span>Export Gantt</span>
+      </div>
+    </div>
   </header>
 
-  <!-- Budget deadline input -->
+  <!-- Budget deadline inputs (3 deadlines) -->
   <div class="budget-section">
-    <div class="budget-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;flex-shrink:0"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-      Budget Request Settings
+    <div class="budget-section-head">
+      <div class="budget-section-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+      </div>
+      <div>
+        <div class="budget-section-title">Budget Request Deadlines</div>
+        <div class="budget-section-sub">Set up to 3 submission windows. Leave a row blank to skip it.</div>
+      </div>
     </div>
-    <div class="budget-fields">
-      <div class="budget-field">
-        <label>Budget Request Deadline</label>
-        <input type="date" id="budget-deadline" oninput="onBudgetChange()" />
-        <div class="field-hint">The date by which all budget requests must be submitted</div>
+
+    <div class="budget-rows">
+
+      <div class="budget-row">
+        <div class="budget-badge b1">1</div>
+        <div class="budget-inputs">
+          <div class="finput">
+            <label for="budget-deadline-1">Deadline Date</label>
+            <input type="date" id="budget-deadline-1" oninput="onBudgetChange()" />
+          </div>
+          <div class="finput finput-narrow">
+            <label for="budget-lead-1">Submit X days before</label>
+            <input type="number" id="budget-lead-1" value="14" min="1" max="60" oninput="onBudgetChange()" />
+          </div>
+        </div>
       </div>
-      <div class="budget-field">
-        <label>Days Before Deadline to Request</label>
-        <input type="number" id="budget-lead" value="7" min="1" max="60" oninput="onBudgetChange()" />
-        <div class="field-hint">How many days before the deadline to submit each tournament's request</div>
+
+      <div class="budget-row">
+        <div class="budget-badge b2">2</div>
+        <div class="budget-inputs">
+          <div class="finput">
+            <label for="budget-deadline-2">Deadline Date <span class="opt-pill">optional</span></label>
+            <input type="date" id="budget-deadline-2" oninput="onBudgetChange()" />
+          </div>
+          <div class="finput finput-narrow">
+            <label for="budget-lead-2">Submit X days before</label>
+            <input type="number" id="budget-lead-2" value="7" min="1" max="60" oninput="onBudgetChange()" />
+          </div>
+        </div>
       </div>
+
+      <div class="budget-row">
+        <div class="budget-badge b3">3</div>
+        <div class="budget-inputs">
+          <div class="finput">
+            <label for="budget-deadline-3">Deadline Date <span class="opt-pill">optional</span></label>
+            <input type="date" id="budget-deadline-3" oninput="onBudgetChange()" />
+          </div>
+          <div class="finput finput-narrow">
+            <label for="budget-lead-3">Submit X days before</label>
+            <input type="number" id="budget-lead-3" value="3" min="1" max="60" oninput="onBudgetChange()" />
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -107,7 +166,7 @@
       </div>
     </div>
     <div class="map-apply">
-      <button class="btn btn-primary" onclick="applyMapping(false)" style="padding:10px 20px;font-size:.82rem;">
+      <button class="btn btn-primary" onclick="applyMapping(false)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>
         Apply &amp; Preview
       </button>
@@ -117,7 +176,7 @@
 
   <!-- Format hint -->
   <div class="format-hint" id="format-hint">
-    <div class="format-hint-title">Expected Spreadsheet Format</div>
+    <div class="format-hint-title">Expected spreadsheet format</div>
     <div class="cols-grid">
       <div class="col-chip">Tournament Name <span class="req">required</span></div>
       <div class="col-chip">Date <span class="req">required</span></div>
@@ -126,15 +185,29 @@
       <div class="col-chip">Debaters</div>
     </div>
     <div class="format-note">
-      Transport: <strong>car</strong>, <strong>metro</strong>, <strong>amtrak</strong>, <strong>fly</strong> / plane<br/>
-      Three task types will be generated per tournament: confirm teams, book transport (if applicable), and submit budget request.
+      Transport values: <strong>car</strong>, <strong>metro</strong>, <strong>amtrak</strong>, <strong>fly</strong> or <strong>plane</strong>.
+      Each tournament gets a confirm-teams task, a book-transport task (if applicable), and one budget request per active deadline.
     </div>
     <div class="legend-preview">
-      <div class="legend-item"><span class="legend-swatch" style="background:#2E75B6"></span>Confirm Teams</div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#1F5C2E"></span>Book Transport</div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#BF8F00"></span>Budget Request</div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#70AD47"></span>Tournament Date</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#4a8fd4"></span>Confirm Teams</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#4ec27a"></span>Book Transport</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#f0b840"></span>Budget DL 1</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#e07824"></span>Budget DL 2</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#d44030"></span>Budget DL 3</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#4ec27a"></span>Tournament Date</div>
     </div>
+  </div>
+
+  <!-- Highcharts Gantt chart -->
+  <div class="chart-section" id="gantt-chart-section" style="display:none;">
+    <div class="chart-header">
+      <span class="chart-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><rect x="3" y="4" width="18" height="2" rx="1"/><rect x="3" y="9" width="14" height="2" rx="1"/><rect x="3" y="14" width="16" height="2" rx="1"/><rect x="3" y="19" width="10" height="2" rx="1"/></svg>
+        Visual Gantt Timeline
+      </span>
+      <span class="chart-sub">Each row is a tournament · bars show task windows · hover for details</span>
+    </div>
+    <div id="highcharts-gantt"></div>
   </div>
 
   <!-- Preview -->
@@ -174,6 +247,7 @@
 
 </div>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://code.highcharts.com/gantt/highcharts-gantt.js"></script>
 <script src="gantt.js"></script>
 </body>
 </html>
