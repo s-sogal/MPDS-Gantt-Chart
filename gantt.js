@@ -240,6 +240,9 @@ function fmtDate(d) {
   if (!d) return '—';
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
+function taskBarEndDate(task) {
+  return task.type === 'budget' && task.deadline ? task.deadline : task.tournDate;
+}
 
 // ── Preview rendering ─────────────────────
 
@@ -252,6 +255,7 @@ function renderPreview(warnings) {
     tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No tasks generated — check column mapping and dates.</td></tr>';
     document.getElementById('row-count').textContent = '0 tasks';
     warnDiv.innerHTML = '';
+    clearGanttChart();
     return;
   }
 
@@ -304,8 +308,7 @@ function renderGanttChart() {
   const section = document.getElementById('chart-section');
 
   if (!ganttTasks.length) {
-    section.style.display = 'none';
-    if (ganttChart) { ganttChart.destroy(); ganttChart = null; }
+    clearGanttChart();
     return;
   }
 
@@ -325,11 +328,11 @@ function renderGanttChart() {
   ganttTasks.forEach(t => {
     const y = tournamentNames.indexOf(t.name);
     if (t.type === 'confirm') {
-      confirmData.push({ name: t.task, start: t.dueDate.getTime(), end: t.tournDate.getTime(), y });
+      confirmData.push({ name: t.task, start: t.dueDate.getTime(), end: taskBarEndDate(t).getTime(), y });
     } else if (t.type === 'book') {
-      bookData.push({ name: t.task, start: t.dueDate.getTime(), end: t.tournDate.getTime(), y });
+      bookData.push({ name: t.task, start: t.dueDate.getTime(), end: taskBarEndDate(t).getTime(), y });
     } else if (t.type === 'budget' && t.deadline) {
-      budgetData.push({ name: t.task, start: t.dueDate.getTime(), end: t.deadline.getTime(), y });
+      budgetData.push({ name: t.task, start: t.dueDate.getTime(), end: taskBarEndDate(t).getTime(), y });
     }
     if (t.tournDate && !mileSeen.has(t.name)) {
       mileSeen.add(t.name);
@@ -354,6 +357,7 @@ function renderGanttChart() {
   document.getElementById('gantt-container').style.height = height + 'px';
 
   if (ganttChart) { ganttChart.destroy(); ganttChart = null; }
+  section.style.display = 'block';
 
   ganttChart = Highcharts.ganttChart('gantt-container', {
     chart: {
@@ -458,7 +462,12 @@ function renderGanttChart() {
     credits: { enabled: false },
   });
 
-  section.style.display = 'block';
+  ganttChart.reflow();
+}
+
+function clearGanttChart() {
+  if (ganttChart) { ganttChart.destroy(); ganttChart = null; }
+  document.getElementById('chart-section').style.display = 'none';
 }
 
 // ── Highcharts export helpers ─────────────────────────────────────────────
@@ -501,7 +510,7 @@ function exportExcel() {
   ganttTasks.forEach(t => { if (!tournMap.has(t.name)) tournMap.set(t.name, t); });
   const tournaments = [...tournMap.values()];
 
-  const allDates = ganttTasks.flatMap(t => [t.dueDate, t.tournDate].filter(Boolean));
+  const allDates = ganttTasks.flatMap(t => [t.dueDate, taskBarEndDate(t), t.tournDate].filter(Boolean));
   if (!allDates.length) { showStatus('No valid dates found.', true); return; }
 
   let cs0 = new Date(Math.min(...allDates));
@@ -601,7 +610,7 @@ function exportExcel() {
 
       mondays.forEach((mon,i)=>{
         const dc=COL_D0+i, me=new Date(mon.getTime()+7*864e5);
-        const bs=task.dueDate, be=task.tournDate;
+        const bs=task.dueDate, be=taskBarEndDate(task);
         const inB=bs&&be&&mon<new Date(be.getTime()+7*864e5)&&me>bs;
         const isF=inB&&bs>=mon&&bs<me;
         const isTod=mon<=today&&today<me;
@@ -696,11 +705,10 @@ function downloadTemplate() {
 
 function clearFile() {
   parsedRows=[]; columnHeaders=[]; ganttTasks=[]; window._tournamentData=[];
-  if (ganttChart) { ganttChart.destroy(); ganttChart = null; }
+  clearGanttChart();
   document.getElementById('file-banner').classList.remove('visible');
   document.getElementById('mapper-section').classList.remove('visible');
   document.getElementById('preview-section').classList.remove('visible');
-  document.getElementById('chart-section').style.display = 'none';
   document.getElementById('format-hint').style.display='';
   document.getElementById('file-input').value='';
   document.getElementById('warnings').innerHTML='';
