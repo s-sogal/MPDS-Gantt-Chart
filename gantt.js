@@ -436,7 +436,7 @@ function renderGanttChart() {
       {
         name: 'Budget Request', color: '#f0c040', borderColor: 'rgba(240,192,64,0.5)', borderRadius: 4,
         dataLabels: { enabled: true, format: '{point.name}', align: 'left', padding: 6,
-          style: { color: '#0b0d11', textOutline: 'none', fontSize: '10px', fontWeight: '500' } },
+          style: { color: '#fff', textOutline: 'none', fontSize: '10px', fontWeight: '500' } },
         data: budgetData,
       },
       {
