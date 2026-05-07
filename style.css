@@ -178,63 +178,27 @@ h1 em { font-style: normal; color: var(--accent); }
   margin-bottom: 20px;
 }
 
-.budget-section-head {
-  display: flex; align-items: flex-start; gap: 14px;
-  margin-bottom: 24px;
+/* Budget section inner layout */
+.budget-title {
+  display: flex; align-items: center; gap: 9px;
+  font-size: .88rem; font-weight: 600; color: var(--b1);
+  margin-bottom: 20px;
 }
-.budget-section-icon {
-  width: 36px; height: 36px; border-radius: var(--r);
-  background: var(--b1-bg); border: 1px solid var(--b1-border);
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-}
-.budget-section-icon svg { width: 16px; height: 16px; color: var(--b1); }
-.budget-section-title {
-  font-size: 1rem; font-weight: 600; color: var(--text); line-height: 1.3;
-}
-.budget-section-sub {
-  font-size: .84rem; color: var(--text2); margin-top: 3px; line-height: 1.5;
-}
+.budget-title svg { color: var(--b1); }
 
-/* Budget rows */
-.budget-rows {
-  display: flex; flex-direction: column; gap: 0;
+.budget-fields {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
 }
+@media (max-width: 640px) { .budget-fields { grid-template-columns: 1fr; } }
 
-.budget-row {
-  display: flex; align-items: center; gap: 16px;
-  padding: 14px 0;
-  border-top: 1px solid var(--border);
-}
-.budget-row:first-child { border-top: none; padding-top: 0; }
-.budget-row:last-child  { padding-bottom: 0; }
+.budget-field { display: flex; flex-direction: column; gap: 6px; }
 
-.budget-badge {
-  width: 30px; height: 30px; border-radius: 50%;
-  font-size: .8rem; font-weight: 700; font-family: 'DM Mono', monospace;
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-}
-.b1 { background: var(--b1);    color: #1a1000; }
-.b2 { background: var(--b2);    color: #fff;    }
-.b3 { background: var(--b3);    color: #fff;    }
-
-.budget-inputs {
-  flex: 1; display: grid; grid-template-columns: 1fr 180px; gap: 12px;
-  align-items: end;
-}
-@media (max-width: 600px) {
-  .budget-inputs { grid-template-columns: 1fr; }
-}
-
-/* Shared field component */
-.finput { display: flex; flex-direction: column; gap: 6px; }
-
-.finput label {
+.budget-field label {
   font-size: .8rem; font-weight: 500; color: var(--text2);
-  display: flex; align-items: center; gap: 7px;
   user-select: none;
 }
 
-.finput input {
+.budget-field input {
   width: 100%;
   background: var(--surface2); border: 1px solid var(--border2);
   border-radius: var(--r); color: var(--text);
@@ -243,14 +207,44 @@ h1 em { font-style: normal; color: var(--accent); }
   transition: border-color .16s, box-shadow .16s;
   -webkit-appearance: none;
 }
-.finput input:focus {
+.budget-field input:focus {
   border-color: var(--b1);
   box-shadow: 0 0 0 3px rgba(240,184,64,.12);
 }
-.finput input[type="date"]::-webkit-calendar-picker-indicator {
+.budget-field input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(.45); cursor: pointer; opacity: .7;
 }
-.finput input[type="number"] { text-align: center; }
+
+.field-hint {
+  font-size: .76rem; color: var(--muted); line-height: 1.5;
+}
+
+.budget-deadlines-hd {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  font-size: .88rem; font-weight: 600; color: var(--text);
+  margin: 22px 0 4px;
+}
+.budget-deadlines-sub { font-size: .78rem; color: var(--muted); font-weight: 400; }
+
+.budget-rows { display: flex; flex-direction: column; }
+
+.budget-row {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+.budget-row:last-child { padding-bottom: 0; }
+.budget-row .budget-fields { flex: 1; margin: 0; }
+
+.budget-badge {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  font-size: .78rem; font-weight: 700; font-family: 'DM Mono', monospace;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 24px;
+}
+.b1 { background: var(--b1); color: #1a1000; }
+.b2 { background: var(--b2); color: #fff; }
+.b3 { background: var(--b3); color: #fff; }
 
 .opt-pill {
   font-size: .68rem; font-weight: 500; color: var(--muted);
@@ -423,28 +417,6 @@ h1 em { font-style: normal; color: var(--accent); }
   width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0;
 }
 
-/* ─────────────────── Highcharts chart section ── */
-.chart-section {
-  margin-top: 28px;
-  background: var(--surface);
-  border: 1px solid var(--border2);
-  border-radius: var(--r-lg);
-  overflow: hidden;
-}
-.chart-header {
-  display: flex; align-items: baseline; justify-content: space-between;
-  flex-wrap: wrap; gap: 8px;
-  background: var(--surface2); border-bottom: 1px solid var(--border);
-  padding: 16px 24px;
-}
-.chart-title {
-  display: flex; align-items: center; gap: 9px;
-  font-size: .95rem; font-weight: 600; color: var(--text);
-}
-.chart-title svg { color: var(--muted); flex-shrink: 0; }
-.chart-sub { font-size: .8rem; color: var(--muted); }
-#highcharts-gantt { min-height: 440px; width: 100%; }
-
 /* Highcharts font override */
 .highcharts-axis-labels text { font-family: 'DM Mono', monospace !important; }
 .highcharts-legend-item text { font-family: 'Inter', sans-serif !important; }
@@ -516,6 +488,10 @@ tr:hover td { background: rgba(255,255,255,.018); }
   background: var(--b3-bg); color: #e87060;
   border: 1px solid var(--b3-border);
 }
+.task-budget {
+  background: var(--b1-bg); color: var(--b1);
+  border: 1px solid var(--b1-border);
+}
 
 /* Table cell content */
 .tourn-name { font-weight: 600; color: var(--text); font-size: .9rem; }
@@ -546,17 +522,18 @@ tr:hover td { background: rgba(255,255,255,.018); }
 .warning-item svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; }
 
 /* ── Highcharts chart section ── */
-.chart-section { margin-bottom: 28px; }
+.chart-section { margin-top: 28px; }
 .chart-hd {
   display: flex; align-items: baseline; justify-content: space-between;
   margin-bottom: 12px; gap: 12px; flex-wrap: wrap;
 }
+.chart-hd .preview-title { font-size: .95rem; }
 .chart-hint {
-  font-family: 'DM Mono', monospace; font-size: .68rem; color: var(--muted);
+  font-family: 'DM Mono', monospace; font-size: .72rem; color: var(--muted);
 }
 #gantt-container {
-  border-radius: var(--radius); overflow: hidden;
-  border: 1px solid var(--border);
+  border-radius: var(--r-lg); overflow: hidden;
+  border: 1px solid var(--border2);
 }
 
 /* ──────────────────────────── Buttons ── */

@@ -33,12 +33,20 @@ function onBudgetChange() {
 }
 
 function getBudgetSettings() {
-  const deadlineVal = document.getElementById('budget-deadline').value;
-  const confirmDays = readLeadDays('confirm-lead', 7);
-  const bookingDays = readLeadDays('booking-lead', 7);
-  const leadDays    = readLeadDays('budget-lead', 7);
-  const deadline    = deadlineVal ? new Date(deadlineVal + 'T12:00:00') : null;
-  return { deadline, leadDays, confirmDays, bookingDays };
+  const confirmDays     = readLeadDays('confirm-lead',     7);
+  const confirmDuration = readLeadDays('confirm-duration', 3);
+  const bookingDays     = readLeadDays('booking-lead',     14);
+  const bookingDuration = readLeadDays('booking-duration', 5);
+  const budgets = [1, 2, 3]
+    .map(n => {
+      const deadlineVal = document.getElementById(`budget-deadline-${n}`).value;
+      const leadDays    = readLeadDays(`budget-lead-${n}`, n === 1 ? 14 : n === 2 ? 7 : 3);
+      const deadline    = deadlineVal ? new Date(deadlineVal + 'T12:00:00') : null;
+      return { deadline, leadDays, num: n };
+    })
+    .filter(s => s.deadline !== null)
+    .sort((a, b) => a.deadline - b.deadline); // chronological so staggering works
+  return { confirmDays, confirmDuration, bookingDays, bookingDuration, budgets };
 }
 
 function readLeadDays(id, fallback) {
@@ -173,7 +181,7 @@ function applyMapping(silent) {
 
 function recomputeTasks(warnings) {
   warnings = warnings || [];
-  const { deadline, leadDays, confirmDays, bookingDays } = getBudgetSettings();
+  const { confirmDays, confirmDuration, bookingDays, bookingDuration, budgets } = getBudgetSettings();
   const data = window._tournamentData || [];
 
   ganttTasks = [];
@@ -182,46 +190,49 @@ function recomputeTasks(warnings) {
     const { name, date, loc, transport, debaters } = t;
     if (!date) return;
 
-    // ① Confirm teams — user-configured days before, always
-    const confirmDate = offsetDays(date, -confirmDays);
+    // ① Confirm teams: bar ends at dueDate (X days before), starts confirmDuration days earlier
+    const confirmDue   = offsetDays(date, -confirmDays);
+    const confirmStart = offsetDays(confirmDue, -confirmDuration);
     addGanttTask({
       name, loc, transport, debaters, tournDate: date,
       task:       'Confirm team members',
-      dueDate:    confirmDate,
-      daysBefore: daysBetween(confirmDate, date),
+      dueDate:    confirmDue,
+      barStart:   confirmStart,
+      barEnd:     confirmDue,
+      daysBefore: daysBetween(confirmDue, date),
       type:       'confirm',
     });
 
-    // ② Book transport — user-configured days before when transport needs booking
-    if (NEEDS_BOOKING.includes(transport)) {
-      const bookDate = offsetDays(date, -bookingDays);
+    // ② Book transport: same bar logic with booking lead + duration
+    if (NEEDS_BOOKING.includes(transport) || NEEDS_CAR.includes(transport)) {
+      const taskLabel  = NEEDS_BOOKING.includes(transport) ? `Book ${transport} tickets` : 'Reserve rental car / van';
+      const bookDue    = offsetDays(date, -bookingDays);
+      const bookStart  = offsetDays(bookDue, -bookingDuration);
       addGanttTask({
         name, loc, transport, debaters, tournDate: date,
-        task:       `Book ${transport} tickets`,
-        dueDate:    bookDate,
-        daysBefore: daysBetween(bookDate, date),
-        type:       'book',
-      });
-    } else if (NEEDS_CAR.includes(transport)) {
-      const bookDate = offsetDays(date, -bookingDays);
-      addGanttTask({
-        name, loc, transport, debaters, tournDate: date,
-        task:       'Reserve rental car / van',
-        dueDate:    bookDate,
-        daysBefore: daysBetween(bookDate, date),
+        task:       taskLabel,
+        dueDate:    bookDue,
+        barStart:   bookStart,
+        barEnd:     bookDue,
+        daysBefore: daysBetween(bookDue, date),
         type:       'book',
       });
     }
 
-    // ③ Budget request — leadDays before the deadline
-    if (deadline) {
-      const budgetDate = offsetDays(deadline, -leadDays);
+    // ③ Budget request — staggered: earliest deadline after tournament date, or last deadline if all have passed
+    const assignedBudget = budgets.find(b => date < b.deadline) || budgets[budgets.length - 1];
+    if (assignedBudget) {
+      const { deadline, leadDays, num } = assignedBudget;
+      const budgetDue = offsetDays(deadline, -leadDays);
       addGanttTask({
         name, loc, transport, debaters, tournDate: date,
-        task:       'Submit budget request',
-        dueDate:    budgetDate,
-        daysBefore: daysBetween(budgetDate, date),
+        task:       `Submit budget request (DL ${num})`,
+        dueDate:    budgetDue,
+        barStart:   budgetDue,
+        barEnd:     deadline,
+        daysBefore: daysBetween(budgetDue, date),
         type:       'budget',
+        budgetNum:  num,
         deadline,
       });
     }
@@ -233,9 +244,11 @@ function recomputeTasks(warnings) {
 function addGanttTask(task) {
   ganttTasks.push({
     ...task,
-    dueDate: new Date(task.dueDate),
+    dueDate:   new Date(task.dueDate),
     tournDate: new Date(task.tournDate),
-    deadline: task.deadline ? new Date(task.deadline) : null,
+    barStart:  task.barStart ? new Date(task.barStart) : null,
+    barEnd:    task.barEnd   ? new Date(task.barEnd)   : null,
+    deadline:  task.deadline ? new Date(task.deadline) : null,
   });
 }
 
@@ -273,9 +286,8 @@ function fmtDate(d) {
   if (!d) return '—';
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
-function taskBarEndDate(task) {
-  return task.type === 'budget' && task.deadline ? task.deadline : task.tournDate;
-}
+function taskBarStartDate(task) { return task.barStart || task.dueDate; }
+function taskBarEndDate(task)   { return task.barEnd   || task.dueDate; }
 
 // ── Preview rendering ─────────────────────
 
@@ -353,19 +365,23 @@ function renderGanttChart() {
     if (!tournSeen.has(t.name)) { tournSeen.add(t.name); tournamentNames.push(t.name); }
   });
 
-  const { deadline } = getBudgetSettings();
+  const { budgets } = getBudgetSettings();
+  const BUDGET_CHART = { 1: '#f0b840', 2: '#e07824', 3: '#d44030' };
 
-  const confirmData = [], bookData = [], budgetData = [], milestones = [];
-  const mileSeen = new Set();
+  const confirmData = [], bookData = [], milestones = [];
+  const budgetData  = { 1: [], 2: [], 3: [] };
+  const mileSeen    = new Set();
 
   ganttTasks.forEach(t => {
     const y = tournamentNames.indexOf(t.name);
+    const start = taskBarStartDate(t).getTime();
+    const end   = taskBarEndDate(t).getTime();
     if (t.type === 'confirm') {
-      confirmData.push({ name: t.task, start: t.dueDate.getTime(), end: taskBarEndDate(t).getTime(), y });
+      confirmData.push({ name: t.task, start, end, y });
     } else if (t.type === 'book') {
-      bookData.push({ name: t.task, start: t.dueDate.getTime(), end: taskBarEndDate(t).getTime(), y });
+      bookData.push({ name: t.task, start, end, y });
     } else if (t.type === 'budget' && t.deadline) {
-      budgetData.push({ name: t.task, start: t.dueDate.getTime(), end: taskBarEndDate(t).getTime(), y });
+      (budgetData[t.budgetNum] || budgetData[1]).push({ name: t.task, start, end, y });
     }
     if (t.tournDate && !mileSeen.has(t.name)) {
       mileSeen.add(t.name);
@@ -377,12 +393,12 @@ function renderGanttChart() {
     value: Date.now(), color: '#e8ff47', width: 1.5, dashStyle: 'ShortDash', zIndex: 5,
     label: { text: 'Today', align: 'left', style: { color: '#e8ff47', fontSize: '10px', fontFamily: "'DM Mono', monospace" } },
   }];
-  if (deadline) {
+  budgets.forEach(({ deadline, num }) => {
     plotLines.push({
-      value: deadline.getTime(), color: '#f0c040', width: 1.5, dashStyle: 'ShortDash', zIndex: 5,
-      label: { text: 'Budget Deadline', align: 'left', style: { color: '#f0c040', fontSize: '10px', fontFamily: "'DM Mono', monospace" } },
+      value: deadline.getTime(), color: BUDGET_CHART[num], width: 1.5, dashStyle: 'ShortDash', zIndex: 5,
+      label: { text: `Budget DL ${num}`, align: 'left', style: { color: BUDGET_CHART[num], fontSize: '10px', fontFamily: "'DM Mono', monospace" } },
     });
-  }
+  });
 
   const rowH   = 48;
   const height = Math.max(340, tournamentNames.length * rowH + 180);
@@ -465,12 +481,13 @@ function renderGanttChart() {
           style: { color: '#fff', textOutline: 'none', fontSize: '10px', fontWeight: '500' } },
         data: bookData,
       },
-      {
-        name: 'Budget Request', color: '#f0c040', borderColor: 'rgba(240,192,64,0.5)', borderRadius: 4,
+      ...[1, 2, 3].filter(n => budgetData[n].length).map(n => ({
+        name: `Budget DL ${n}`, color: BUDGET_CHART[n],
+        borderColor: BUDGET_CHART[n] + '80', borderRadius: 4,
         dataLabels: { enabled: true, format: '{point.name}', align: 'left', padding: 6,
-          style: { color: '#fff', textOutline: 'none', fontSize: '10px', fontWeight: '500' } },
-        data: budgetData,
-      },
+          style: { color: n === 1 ? '#1a1000' : '#fff', textOutline: 'none', fontSize: '10px', fontWeight: '500' } },
+        data: budgetData[n],
+      })),
       {
         name: 'Tournament Date', color: '#e8ff47', marker: { symbol: 'diamond' },
         data: milestones,
@@ -537,7 +554,7 @@ function R(r,c){ return `${colLetter(c)}${r+1}`; }
 function exportExcel() {
   if (!ganttTasks.length) { showStatus('Nothing to export yet.', true); return; }
 
-  const budgetSettings = getBudgetSettings();
+  const { budgets: budgetSettings } = getBudgetSettings();
   const deadlines = budgetSettings.map(s => s.deadline).filter(Boolean);
   const tournMap = new Map();
   ganttTasks.forEach(t => { if (!tournMap.has(t.name)) tournMap.set(t.name, t); });
@@ -619,8 +636,12 @@ function exportExcel() {
 
   // Data rows
   let cr=ROW_DATA;
-  const TCOLORS={confirm:C.BAR_CONFIRM, book:C.BAR_BOOK, budget:C.BAR_BUDGET};
-  const TLABELS={confirm:'Confirm Team Members', book:'Book Transport', budget:'Budget Request'};
+  const TCOLORS = t => t.type === 'budget'
+    ? (BUDGET_BAR_COLORS[t.budgetNum] || C.BAR_BUDGET)
+    : ({ confirm: C.BAR_CONFIRM, book: C.BAR_BOOK }[t.type] || C.BAR_CONFIRM);
+  const TLABELS = t => t.type === 'budget'
+    ? `Budget Request (DL ${t.budgetNum})`
+    : ({ confirm: 'Confirm Team Members', book: 'Book Transport' }[t.type] || t.task);
 
   tournaments.forEach(tourn=>{
     const tTasks=ganttTasks.filter(t=>t.name===tourn.name);
@@ -645,7 +666,7 @@ function exportExcel() {
 
       mondays.forEach((mon,i)=>{
         const dc=COL_D0+i, me=new Date(mon.getTime()+7*864e5);
-        const bs=task.dueDate, be=taskBarEndDate(task);
+        const bs=taskBarStartDate(task), be=taskBarEndDate(task);
         const inB=bs&&be&&mon<new Date(be.getTime()+7*864e5)&&me>bs;
         const isF=inB&&bs>=mon&&bs<me;
         const isTod=mon<=today&&today<me;
