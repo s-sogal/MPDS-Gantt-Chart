@@ -223,10 +223,20 @@ function recomputeTasks(warnings) {
 function parseDate(raw) {
   if (raw instanceof Date && !isNaN(raw)) return raw;
   if (raw === '' || raw === null || raw === undefined) return null;
-  const num = parseFloat(raw);
-  if (!isNaN(num) && num > 1000) return new Date(Math.round((num - 25569) * 86400 * 1000));
-  const d = new Date(String(raw));
-  return isNaN(d) ? null : d;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    const d = new Date(trimmed);
+    if (!isNaN(d)) return d;
+    // Only treat as Excel serial if it's a bare integer string
+    const num = parseFloat(trimmed);
+    if (!isNaN(num) && /^\d+(\.\d+)?$/.test(trimmed) && num > 25569)
+      return new Date(Math.round((num - 25569) * 86400 * 1000));
+    return null;
+  }
+  // Numeric Excel serial (date cells not parsed by XLSX with cellDates:true)
+  if (typeof raw === 'number' && !isNaN(raw) && raw > 25569)
+    return new Date(Math.round((raw - 25569) * 86400 * 1000));
+  return null;
 }
 
 function offsetMonths(d, m) {
