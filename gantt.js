@@ -75,17 +75,23 @@ function handleFileInput(input) {
 // ── File parsing ──────────────────────────
 
 function processFile(file) {
+  // Reset input so re-selecting the same file fires onchange again
+  document.getElementById('file-input').value = '';
+
   const reader = new FileReader();
   reader.onload = e => {
     try {
       const wb   = XLSX.read(e.target.result, { type: 'array', cellDates: true });
       const ws   = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (!ws) { showStatus('No sheet found in file.', true); return; }
 
-      if (!data.length) { showStatus('File appears empty.', true); return; }
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (!data.length || !data[0].length) { showStatus('File appears empty.', true); return; }
 
       columnHeaders = data[0].map(String);
       parsedRows    = data.slice(1).filter(r => r.some(c => c !== ''));
+
+      if (!parsedRows.length) { showStatus('No data rows found — check the file.', true); return; }
 
       document.getElementById('file-banner').classList.add('visible');
       document.getElementById('file-name-display').textContent = file.name;
@@ -94,14 +100,17 @@ function processFile(file) {
 
       document.getElementById('format-hint').style.display = 'none';
       document.getElementById('preview-section').classList.remove('visible');
+      clearGanttChart();
 
       populateMapper(columnHeaders);
       document.getElementById('mapper-section').classList.add('visible');
       autoApplyMapping();
     } catch (err) {
-      showStatus('Could not read file — please use .xlsx, .xls, or .csv', true);
+      console.error('File parse error:', err);
+      showStatus(`Could not read file: ${err.message || 'unsupported format'}`, true);
     }
   };
+  reader.onerror = () => showStatus('File could not be read.', true);
   reader.readAsArrayBuffer(file);
 }
 
@@ -560,7 +569,7 @@ function exportExcel() {
   ganttTasks.forEach(t => { if (!tournMap.has(t.name)) tournMap.set(t.name, t); });
   const tournaments = [...tournMap.values()];
 
-  const allDates = ganttTasks.flatMap(t => [t.dueDate, taskBarEndDate(t), t.tournDate].filter(Boolean));
+  const allDates = ganttTasks.flatMap(t => [taskBarStartDate(t), t.dueDate, taskBarEndDate(t), t.tournDate].filter(Boolean));
   if (!allDates.length) { showStatus('No valid dates found.', true); return; }
 
   let cs0 = new Date(Math.min(...allDates));
@@ -675,7 +684,9 @@ function exportExcel() {
 
         let fill=bg, lbl='', fnt=xfFont({sz:7});
         if(inB){
-          fill=barColor; fnt=xfFont({sz:7,bold:true,color:C.WHITE});
+          fill=barColor;
+          const txtColor = task.type==='budget'&&task.budgetNum===1 ? C.TEXT : C.WHITE;
+          fnt=xfFont({sz:7,bold:true,color:txtColor});
           if(isF) lbl=TLABELS(task);
         } else if(isMk){ fill=C.GREEN; fnt=xfFont({sz:7,bold:true,color:C.WHITE}); }
         else if(isBudgetDL&&!inB){ fill=C.GOLD_LIGHT; }
@@ -749,14 +760,20 @@ function exportExcel() {
 // ── Template download ─────────────────────
 
 function downloadTemplate() {
+  const d = (y,m,day) => new Date(y, m-1, day); // local date, avoids UTC offset shifts
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([
     ['Tournament Name','Date','Location','Transport','Debaters'],
-    ['Spring Invitational',   '2026-04-15','Chicago, IL',      'fly',    8],
-    ['Regional Championships','2026-05-20','Boston, MA',        'amtrak', 6],
-    ['District Qualifier',    '2026-06-10','Silver Spring, MD', 'car',    4],
-    ['State Finals',          '2026-07-08','Richmond, VA',      'metro',  10],
+    ['Spring Invitational',   d(2026,4,15), 'Chicago, IL',      'fly',    8],
+    ['Regional Championships',d(2026,5,20), 'Boston, MA',       'amtrak', 6],
+    ['District Qualifier',    d(2026,6,10), 'Silver Spring, MD','car',    4],
+    ['State Finals',          d(2026,7, 8), 'Richmond, VA',     'metro',  10],
   ]);
+  // Apply date format to column B so Excel shows dates, not serial numbers
+  for (let r = 1; r <= 4; r++) {
+    const cell = ws[XLSX.utils.encode_cell({r, c:1})];
+    if (cell) cell.z = 'yyyy-mm-dd';
+  }
   ws['!cols']=[{wch:26},{wch:14},{wch:22},{wch:12},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws,'Tournaments');
   XLSX.writeFile(wb,'tournament_template.xlsx');
