@@ -40,7 +40,7 @@ function getBudgetSettings() {
   const budgets = [1, 2, 3]
     .map(n => {
       const deadlineVal = document.getElementById(`budget-deadline-${n}`).value;
-      const leadDays    = readLeadDays(`budget-lead-${n}`, n === 1 ? 14 : n === 2 ? 7 : 3);
+      const leadDays    = readLeadDays(`budget-lead-${n}`, 11);
       const deadline    = deadlineVal ? new Date(deadlineVal + 'T12:00:00') : null;
       return { deadline, leadDays, num: n };
     })
