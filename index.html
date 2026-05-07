@@ -40,62 +40,33 @@
     </div>
   </header>
 
-  <!-- Budget deadline inputs (3 deadlines) -->
+  <!-- Task timing inputs -->
   <div class="budget-section">
-    <div class="budget-section-head">
-      <div class="budget-section-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-      </div>
-      <div>
-        <div class="budget-section-title">Budget Request Deadlines</div>
-        <div class="budget-section-sub">Set up to 3 submission windows. Leave a row blank to skip it.</div>
-      </div>
+    <div class="budget-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;flex-shrink:0"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+      Timeline Settings
     </div>
-
-    <div class="budget-rows">
-
-      <div class="budget-row">
-        <div class="budget-badge b1">1</div>
-        <div class="budget-inputs">
-          <div class="finput">
-            <label for="budget-deadline-1">Deadline Date</label>
-            <input type="date" id="budget-deadline-1" oninput="onBudgetChange()" />
-          </div>
-          <div class="finput finput-narrow">
-            <label for="budget-lead-1">Submit X days before</label>
-            <input type="number" id="budget-lead-1" value="14" min="1" max="60" oninput="onBudgetChange()" />
-          </div>
-        </div>
+    <div class="budget-fields">
+      <div class="budget-field">
+        <label>Days Before Tournament to Confirm Team Members</label>
+        <input type="number" id="confirm-lead" value="7" min="1" max="120" oninput="onTimelineSettingsChange()" onchange="onTimelineSettingsChange()" />
+        <div class="field-hint">How many days before each tournament to confirm who is attending</div>
       </div>
-
-      <div class="budget-row">
-        <div class="budget-badge b2">2</div>
-        <div class="budget-inputs">
-          <div class="finput">
-            <label for="budget-deadline-2">Deadline Date <span class="opt-pill">optional</span></label>
-            <input type="date" id="budget-deadline-2" oninput="onBudgetChange()" />
-          </div>
-          <div class="finput finput-narrow">
-            <label for="budget-lead-2">Submit X days before</label>
-            <input type="number" id="budget-lead-2" value="7" min="1" max="60" oninput="onBudgetChange()" />
-          </div>
-        </div>
+      <div class="budget-field">
+        <label>Days Before Tournament to Book Transport</label>
+        <input type="number" id="booking-lead" value="7" min="1" max="120" oninput="onTimelineSettingsChange()" onchange="onTimelineSettingsChange()" />
+        <div class="field-hint">How many days before each tournament to book flights, train tickets, cars, or vans</div>
       </div>
-
-      <div class="budget-row">
-        <div class="budget-badge b3">3</div>
-        <div class="budget-inputs">
-          <div class="finput">
-            <label for="budget-deadline-3">Deadline Date <span class="opt-pill">optional</span></label>
-            <input type="date" id="budget-deadline-3" oninput="onBudgetChange()" />
-          </div>
-          <div class="finput finput-narrow">
-            <label for="budget-lead-3">Submit X days before</label>
-            <input type="number" id="budget-lead-3" value="3" min="1" max="60" oninput="onBudgetChange()" />
-          </div>
-        </div>
+      <div class="budget-field">
+        <label>Budget Request Deadline</label>
+        <input type="date" id="budget-deadline" oninput="onTimelineSettingsChange()" onchange="onTimelineSettingsChange()" />
+        <div class="field-hint">The date by which all budget requests must be submitted</div>
       </div>
-
+      <div class="budget-field">
+        <label>Days Before Deadline to Request</label>
+        <input type="number" id="budget-lead" value="7" min="1" max="60" oninput="onTimelineSettingsChange()" onchange="onTimelineSettingsChange()" />
+        <div class="field-hint">How many days before the deadline to submit each tournament's request</div>
+      </div>
     </div>
   </div>
 
@@ -185,16 +156,14 @@
       <div class="col-chip">Debaters</div>
     </div>
     <div class="format-note">
-      Transport values: <strong>car</strong>, <strong>metro</strong>, <strong>amtrak</strong>, <strong>fly</strong> or <strong>plane</strong>.
-      Each tournament gets a confirm-teams task, a book-transport task (if applicable), and one budget request per active deadline.
+      Transport: <strong>car</strong>, <strong>metro</strong>, <strong>amtrak</strong>, <strong>fly</strong> / plane<br/>
+      Three task types can be generated per tournament: confirm team members, book transport (if applicable), and submit budget request.
     </div>
     <div class="legend-preview">
-      <div class="legend-item"><span class="legend-swatch" style="background:#4a8fd4"></span>Confirm Teams</div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#4ec27a"></span>Book Transport</div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#f0b840"></span>Budget DL 1</div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#e07824"></span>Budget DL 2</div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#d44030"></span>Budget DL 3</div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#4ec27a"></span>Tournament Date</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#2E75B6"></span>Confirm Team Members</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#1F5C2E"></span>Book Transport</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#BF8F00"></span>Budget Request</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#70AD47"></span>Tournament Date</div>
     </div>
   </div>
 
